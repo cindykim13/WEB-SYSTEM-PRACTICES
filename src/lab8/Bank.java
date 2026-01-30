@@ -1,7 +1,5 @@
 package lab8;
 
-import java.util.Random;
-
 public class Bank {
     private final Account[] accounts;
 
@@ -16,35 +14,48 @@ public class Bank {
         return accounts[id];
     }
 
-    /**
-     * Phương thức chuyển tiền KHÔNG thread-safe.
-     * Logic kiểm tra và trừ tiền bị tách rời, cộng thêm sleep để dễ gây lỗi.
-     */
     public void transfer(int fromId, int toId, double amount) {
         Account from = accounts[fromId];
         Account to = accounts[toId];
 
-        // CHECK-THEN-ACT: Kiểm tra số dư
+        // Chúng ta thao tác trực tiếp trên biến local để mở rộng "Race Window"
+        // Mô phỏng chính xác quy trình Load-Store của CPU
+
         if (from.getBalance() >= amount) {
-
-            // CRITICAL SECTION BẮT ĐẦU
             try {
-                // 1. Trừ tiền tài khoản nguồn
-                from.withdraw(amount);
+                // ---------------------------------------------------------
+                // BƯỚC 1: RÚT TIỀN (SOURCE) - CỐ TÌNH GÂY LỖI
+                // ---------------------------------------------------------
 
-                // 2. GIẢ LẬP ĐỘ TRỄ (Tăng khả năng tranh chấp)
-                // Thread nhường CPU tại đây, tạo cơ hội cho Thread khác chen vào
-                Thread.sleep(1);
+                // 1. READ: Đọc dữ liệu từ RAM vào "CPU Register" (biến local)
+                double currentFromBalance = from.getBalance();
 
-                // 3. Cộng tiền tài khoản đích
-                to.deposit(amount);
+                // 2. CONTEXT SWITCH FORCED: Ngừng lại để luồng khác chen vào
+                // 10ms là khoảng thời gian "vô tận" với CPU, đảm bảo va chạm.
+                Thread.sleep(10);
+
+                // 3. MODIFY & WRITE: Tính toán và ghi lại vào RAM
+                double newFromBalance = currentFromBalance - amount;
+                from.setBalance(newFromBalance);
+
+                // ---------------------------------------------------------
+                // BƯỚC 2: NẠP TIỀN (DESTINATION) - CỐ TÌNH GÂY LỖI
+                // ---------------------------------------------------------
+
+                // 1. READ
+                double currentToBalance = to.getBalance();
+
+                // 2. CONTEXT SWITCH FORCED
+                // Không cần sleep ở đây cũng được, nhưng thêm vào cho chắc chắn lỗi
+                // Thread.sleep(10);
+
+                // 3. MODIFY & WRITE
+                double newToBalance = currentToBalance + amount;
+                to.setBalance(newToBalance);
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            // CRITICAL SECTION KẾT THÚC
-
-            // System.out.println("Transferred " + amount + " from " + fromId + " to " + toId);
         }
     }
 
@@ -54,9 +65,5 @@ public class Bank {
             total += a.getBalance();
         }
         return total;
-    }
-
-    public int size() {
-        return accounts.length;
     }
 }

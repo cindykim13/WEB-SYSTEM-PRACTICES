@@ -9,25 +9,18 @@ public class Account {
         this.balance = initialBalance;
     }
 
-    public int getId() {
-        return id;
+    public int getId() { return id; }
+
+    // Phương thức đọc
+    public double getBalance() { return balance; }
+
+    // --- THÊM MỚI: Phương thức ghi đè (Setter) ---
+    // Cho phép thiết lập số dư trực tiếp, phục vụ việc mô phỏng lỗi
+    public void setBalance(double balance) {
+        this.balance = balance;
     }
 
-    public double getBalance() {
-        return balance;
-    }
-
-    // Các phương thức thay đổi trạng thái không an toàn (Non-thread-safe)
-    public void withdraw(double amount) {
-        this.balance -= amount;
-    }
-
-    public void deposit(double amount) {
-        this.balance += amount;
-    }
-
-    @Override
-    public String toString() {
-        return String.format("Acc[%d]: %.2f", id, balance);
-    }
+    // Giữ nguyên các hàm cũ nếu muốn, nhưng ta sẽ không dùng chúng trong Bank nữa
+    public void withdraw(double amount) { this.balance -= amount; }
+    public void deposit(double amount) { this.balance += amount; }
 }

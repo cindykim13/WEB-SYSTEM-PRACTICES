@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit;
 public class BankSimulation {
     private static final int NUM_ACCOUNTS = 10;
     private static final double INITIAL_BALANCE = 1000;
-    private static final int NUM_THREADS = 200; // Số lượng luồng đồng thời
+    private static final int NUM_THREADS = 100; // Số lượng luồng đồng thời
     private static final int NUM_ITERATIONS = 1000; // Mỗi luồng thực hiện bao nhiêu giao dịch
 
     public static void main(String[] args) throws InterruptedException {
@@ -36,11 +36,22 @@ public class BankSimulation {
                 }
             });
         }
+        /*for (int i = 0; i < NUM_THREADS; i++) {
+            executor.submit(() -> {
+                for (int j = 0; j < NUM_ITERATIONS; j++) {
+                    int from = random.nextInt(NUM_ACCOUNTS);
+                    int to = random.nextInt(NUM_ACCOUNTS);
 
+                    if (from != to) {
+                        bank.transfer(from, to, 10);
+                    }
+                }
+            });
+        }*/
         // Đóng executor và chờ tất cả task hoàn thành
         executor.shutdown();
         // Chờ tối đa 1 phút. Đây là bước quan trọng để đảm bảo tính toán xong mới in kết quả.
-        boolean finished = executor.awaitTermination(1, TimeUnit.MINUTES);
+        boolean finished = executor.awaitTermination(2, TimeUnit.MINUTES);
 
         long endTime = System.currentTimeMillis();
 

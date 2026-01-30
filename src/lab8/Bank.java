@@ -2,36 +2,52 @@ package lab8;
 
 public class Bank {
     private final Account[] accounts;
+    private final ExecutionMode mode; // Lưu lại mode được chọn
 
-    public Bank(int numAccounts, double initialBalance) {
-        accounts = new Account[numAccounts];
+    public Bank(int numAccounts, double initialBalance, ExecutionMode mode) {
+        this.accounts = new Account[numAccounts];
         for (int i = 0; i < numAccounts; i++) {
             accounts[i] = new Account(i, initialBalance);
         }
+        this.mode = mode; // Nhận mode từ bên ngoài
     }
 
-    public Account getAccount(int id) {
-        return accounts[id];
+    // --- BỘ ĐIỀU PHỐI (DISPATCHER) ---
+    // Phương thức public duy nhất, gọi đến logic private tương ứng
+    public void transfer(int fromId, int toId, double amount) {
+        switch (mode) {
+            case V0_UNSAFE:
+                transferV0_Unsafe(fromId, toId, amount); // Thêm case này
+                break;
+            case V1_SYNC_METHOD:
+                transferV1_SyncMethod(fromId, toId, amount);
+                break;
+            case V2_SYNC_BLOCK:
+                transferV2_SyncBlock(fromId, toId, amount);
+                break;
+            case V3_REENTRANT_LOCK:
+                transferV3_ReentrantLock(fromId, toId, amount);
+                break;
+        }
     }
-
-    // VERSION 1: SYNCHRONIZED METHOD (Coarse-grained Locking)
-    // Từ khóa synchronized khóa toàn bộ đối tượng Bank (this)
-    public synchronized void transfer(int fromId, int toId, double amount) {
+    // VERSION 0: Logic Lỗi (Copy từ thành quả Giai đoạn 2)
+    private void transferV0_Unsafe(int fromId, int toId, double amount) {
         Account from = accounts[fromId];
         Account to = accounts[toId];
 
         if (from.getBalance() >= amount) {
             try {
-                // Logic cũ gây lỗi, nay đã được bọc trong synchronized
+                // MÔ PHỎNG LỖI RACE CONDITION (Lost Update)
+                // Tách rời Read và Write, chèn độ trễ vào giữa
 
-                // 1. Rút tiền
+                // Rút tiền
                 double currentFrom = from.getBalance();
-                Thread.sleep(1); // Mô phỏng độ trễ xử lý
+                Thread.sleep(10); // Cố tình dừng để thread khác chen vào đọc dữ liệu cũ
                 from.setBalance(currentFrom - amount);
 
-                // 2. Nạp tiền
+                // Nạp tiền
                 double currentTo = to.getBalance();
-                // Thread.sleep(1);
+                // Thread.sleep(10); // Có thể sleep hoặc không
                 to.setBalance(currentTo + amount);
 
             } catch (InterruptedException e) {
@@ -39,77 +55,66 @@ public class Bank {
             }
         }
     }
-    /*
-    // VERSION 2: SYNCHRONIZED BLOCK + LOCK ORDERING
-    public void transfer(int fromId, int toId, double amount) {
+
+    // --- VERSION 1: SYNCHRONIZED METHOD ---
+    private synchronized void transferV1_SyncMethod(int fromId, int toId, double amount) {
         Account from = accounts[fromId];
         Account to = accounts[toId];
+        if (from.getBalance() >= amount) {
+            try {
+                from.setBalance(from.getBalance() - amount);
+                Thread.sleep(1);
+                to.setBalance(to.getBalance() + amount);
+            } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }
+    }
 
-        // --- CƠ CHẾ CHỐNG DEADLOCK: LOCK ORDERING ---
-        // Luôn khóa tài khoản có ID nhỏ hơn trước
+    // --- VERSION 2: SYNCHRONIZED BLOCK + LOCK ORDERING ---
+    private void transferV2_SyncBlock(int fromId, int toId, double amount) {
+        Account from = accounts[fromId];
+        Account to = accounts[toId];
         Account firstLock = (from.getId() < to.getId()) ? from : to;
         Account secondLock = (from.getId() < to.getId()) ? to : from;
-
         synchronized (firstLock) {
             synchronized (secondLock) {
-                // CRITICAL SECTION: Chỉ 2 tài khoản này bị khóa, các tài khoản khác vẫn hoạt động
                 if (from.getBalance() >= amount) {
                     try {
-                        double currentFrom = from.getBalance();
-                        // Dù có sleep bao lâu, Thread khác muốn đụng vào 2 acc này cũng phải chờ
-                        // Nhưng Thread đụng vào acc khác thì thoải mái -> Hiệu năng cao
+                        from.setBalance(from.getBalance() - amount);
                         Thread.sleep(1);
-                        from.setBalance(currentFrom - amount);
-
-                        double currentTo = to.getBalance();
-                        to.setBalance(currentTo + amount);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
+                        to.setBalance(to.getBalance() + amount);
+                    } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 }
             }
         }
     }
-    */
 
-    /*
-    // VERSION 3: REENTRANT LOCK (Explicit Lock)
-    public void transfer(int fromId, int toId, double amount) {
+    // --- VERSION 3: REENTRANTLOCK ---
+    private void transferV3_ReentrantLock(int fromId, int toId, double amount) {
         Account from = accounts[fromId];
         Account to = accounts[toId];
-
-        // Vẫn phải áp dụng Lock Ordering để tránh Deadlock
         Account firstLock = (from.getId() < to.getId()) ? from : to;
         Account secondLock = (from.getId() < to.getId()) ? to : from;
 
-        // BẮT ĐẦU KHÓA
-        firstLock.getLock().lock(); // Khóa 1
+        firstLock.getLock().lock();
         try {
-            secondLock.getLock().lock(); // Khóa 2
+            secondLock.getLock().lock();
             try {
-                // CRITICAL SECTION
                 if (from.getBalance() >= amount) {
                     try {
-                         double currentFrom = from.getBalance();
-                         Thread.sleep(1);
-                         from.setBalance(currentFrom - amount);
-
-                         double currentTo = to.getBalance();
-                         to.setBalance(currentTo + amount);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
+                        from.setBalance(from.getBalance() - amount);
+                        Thread.sleep(1);
+                        to.setBalance(to.getBalance() + amount);
+                    } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 }
             } finally {
-                // QUAN TRỌNG: Phải unlock trong finally
                 secondLock.getLock().unlock();
             }
         } finally {
-            // QUAN TRỌNG: Phải unlock trong finally
             firstLock.getLock().unlock();
         }
     }
-    */
+
+    // Phương thức tiện ích không đổi
     public double getTotalBalance() {
         double total = 0;
         for (Account a : accounts) {
